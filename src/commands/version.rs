@@ -6,6 +6,14 @@ use semver::Version;
 
 use crate::app::BaseApp;
 
+fn cargo_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
+fn version() -> &'static str {
+    option_env!("GIT_VERSION").unwrap_or(cargo_version())
+}
+
 #[derive(clap::Args)]
 pub struct Args {
     /// Only print the version
@@ -15,13 +23,13 @@ pub struct Args {
 
 pub async fn run(base_app: BaseApp, args: Args) -> Result<()> {
     if args.plain {
-        println!("{}", env!("CARGO_PKG_VERSION"));
+        println!("{}", version());
     } else {
         println!(
             " > {} by {}\n   version {}\n\n {}",
             style(env!("CARGO_PKG_NAME")).green().bold(),
             style(env!("CARGO_PKG_AUTHORS")).magenta().bold(),
-            style(env!("CARGO_PKG_VERSION")).bold(),
+            style(version()).bold(),
             style("> checking for updates...").dim()
         );
 
