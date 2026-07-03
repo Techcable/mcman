@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
 use crate::{
@@ -19,6 +19,8 @@ const API_V1: &str = "https://hangar.papermc.io/api/v1";
 pub enum HangarError {
     #[error(transparent)]
     Request(#[from] reqwest::Error),
+    #[error(transparent)]
+    Deser(#[from] serde_json::Error)
     // #[error("{0}")]
     // APIError(String),
 }
@@ -170,7 +172,17 @@ impl Display for Platform {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct RawPlatformVersionDownload {
+    file_info: Option<FileInfo>,
+    #[serde(default)]
+    download_url: Option<String>,
+    #[serde(default)]
+    external_url: Option<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum PlatformVersionDownload {
     #[serde(rename_all = "camelCase")]
@@ -184,6 +196,32 @@ pub enum PlatformVersionDownload {
         file_info: FileInfo,
         external_url: String,
     },
+}
+impl<'de> serde::Deserialize<'de> for PlatformVersionDownload {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>
+    {
+        use serde::de::Error;
+        // This manual implementation gives better error messages than #[serde(untagged)] does
+        let raw = <RawPlatformVersionDownload as Deserialize<'de>>::deserialize(deserializer)?;
+        let file_info = raw.file_info.ok_or_else(|| {
+            serde::de::Error::custom("Missing `file_info` for download (is it external?)")
+        })?;
+        match (raw.download_url, raw.external_url) {
+            (None, None) => Err(D::Error::custom("A download must have at least one of `external_url` or `download_url`")),
+            // Prefer hangar download url when present
+            (Some(download_url), _) => Ok(PlatformVersionDownload::Hangar {
+                download_url,
+                file_info
+            }),
+            // Revert to external url when hangar URL is missing
+            (None, Some(external_url)) => Ok(PlatformVersionDownload::External {
+                file_info,
+                external_url
+            })
+        }
+    }
 }
 
 impl PlatformVersionDownload {
