@@ -31,9 +31,15 @@ pub fn run(app: &App, args: Args) -> Result<()> {
 
     for entry in glob(&files)? {
         let entry = entry?;
+        let absolute_entry = fs::canonicalize(&entry)?;
 
-        let diff = diff_paths(&entry, fs::canonicalize(&app.server.path)?)
-            .ok_or(anyhow!("Cannot diff paths"))?;
+        let diff =
+            diff_paths(&absolute_entry, fs::canonicalize(&app.server.path)?).ok_or_else(|| {
+                anyhow!(
+                    "Cannot diff paths {entry:?} and {server_path:?}",
+                    server_path = &app.server.path
+                )
+            })?;
 
         if !diff.starts_with("server") {
             bail!("You aren't inside server/");
