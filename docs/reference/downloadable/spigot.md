@@ -12,6 +12,7 @@ In this case, luckperms has the id of `28140` - but you can paste it with the na
     ```toml title="Download LuckPerms from spigot"
     type = "spigot"
     id = "luckperms.28140"
+    version = "latest"
     ```
 
 !!! tip
@@ -19,7 +20,8 @@ In this case, luckperms has the id of `28140` - but you can paste it with the na
 
 **Fields:**
 
-| Name   | Type       | Description       |
-| ------ | ---------- | ----------------- |
-| `type` | `"spigot"` |                   |
-| `id`   | string     | ID of the project |
+| Name      | Type               | Description                                                |
+| --------- | ------------------ | ----------------------------------------------------------- |
+| `type`    | `"spigot"`         |                                                             |
+| `id`      | string             | ID of the project                                          |
+| `version` | string/`"latest"`  | Version ID (not name), `"latest"` to always use the latest version |
