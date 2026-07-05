@@ -20,6 +20,12 @@ pub struct Args {
     /// Treat all patterns as literals instead of as glob patterns.
     #[arg(long, short = 'F')]
     fixed_strings: bool,
+    /// Answer use to all prompts.
+    #[arg(long)]
+    yes: bool,
+    /// Answer yes to all overwrite prompts.
+    #[arg(long)]
+    yes_overwrite: bool,
 }
 
 pub fn run(app: &App, args: Args) -> Result<()> {
@@ -73,10 +79,12 @@ pub fn run(app: &App, args: Args) -> Result<()> {
         fs::create_dir_all(destination.parent().unwrap()).context("Failed to create dirs")?;
 
         if destination.exists() {
-            if app.confirm(&format!(
-                "File '{}' already exists, overwrite?",
-                destination.display()
-            ))? {
+            if (args.yes_overwrite || args.yes)
+                || app.confirm(&format!(
+                    "File '{}' already exists, overwrite?",
+                    destination.display()
+                ))?
+            {
                 app.info(format!("Overwriting {}", destination.display()));
                 overwritten += 1;
             } else {
