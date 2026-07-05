@@ -18,6 +18,11 @@ pub struct SpigotAPI<'a>(pub &'a App);
 pub const API_URL: &str = "https://api.spiget.org/v2";
 pub const CACHE_DIR: &str = "spiget";
 
+// Separate from CACHE_DIR (which holds downloaded jars): this caches the
+// name -> id version lookups on disk, since a version's data never changes
+// once published, so a cache hit can skip the network entirely.
+pub const VERSIONS_CACHE_DIR: &str = "spiget-versions";
+
 // Spiget doesn't let you look up a version by its (non-unique) name directly,
 // so we have to page through the full version list ourselves to find it.
 const VERSIONS_PAGE_SIZE: u32 = 100;
@@ -96,8 +101,26 @@ impl SpigotAPI<'_> {
         Ok((versions, page_count))
     }
 
+    fn cached_versions_path(id: &str) -> String {
+        format!("{}.json", Self::get_resource_id(id))
+    }
+
+    fn get_cached_versions(&self, id: &str) -> Result<Option<Vec<SpigotVersion>>> {
+        Ok(match self.0.get_cache(VERSIONS_CACHE_DIR) {
+            Some(cache) => cache.try_get_json(&Self::cached_versions_path(id))?,
+            None => None,
+        })
+    }
+
+    fn save_cached_versions(&self, id: &str, versions: &[SpigotVersion]) -> Result<()> {
+        if let Some(cache) = self.0.get_cache(VERSIONS_CACHE_DIR) {
+            cache.write_json(&Self::cached_versions_path(id), &versions)?;
+        }
+
+        Ok(())
+    }
+
     /// Fetches every version of a resource, paging through Spiget's version list.
-    #[allow(unused)]
     pub async fn fetch_versions(&self, id: &str) -> Result<Vec<SpigotVersion>> {
         let mut versions = Vec::new();
         let mut page = 1;
@@ -128,27 +151,25 @@ impl SpigotAPI<'_> {
 
     /// Looks up a version by its display name (eg. `"1.4.1"`), since Spiget only
     /// supports looking versions up by internal id or the literal `"latest"`.
+    ///
+    /// A version's data is immutable once published, so a name found in the
+    /// on-disk cache is returned without hitting the network at all. On a
+    /// cache miss, the full version list is fetched (paging through all of
+    /// Spiget's version list) and the cache is refreshed before searching it.
     pub async fn fetch_version_by_name(&self, id: &str, name: &str) -> Result<SpigotVersion> {
-        let mut page = 1;
-
-        loop {
-            let (page_versions, page_count) = self
-                .fetch_versions_page(id, page, VERSIONS_PAGE_SIZE)
-                .await?;
-
-            if let Some(version) = page_versions.into_iter().find(|v| v.name == name) {
+        if let Some(cached) = self.get_cached_versions(id)? {
+            if let Some(version) = cached.into_iter().find(|v| v.name == name) {
                 return Ok(version);
             }
-
-            if page >= page_count {
-                break;
-            }
-            page += 1;
         }
 
-        Err(anyhow!(
-            "No version named '{name}' found for spigot resource '{id}'"
-        ))
+        let versions = self.fetch_versions(id).await?;
+        self.save_cached_versions(id, &versions)?;
+
+        versions
+            .into_iter()
+            .find(|v| v.name == name)
+            .ok_or_else(|| anyhow!("No version named '{name}' found for spigot resource '{id}'"))
     }
 
     pub async fn fetch_version(&self, id: &str, version: &str) -> Result<SpigotVersion> {
