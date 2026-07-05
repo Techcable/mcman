@@ -1,24 +1,28 @@
-use std::{fs, path::PathBuf, time::Duration};
-
 use anyhow::{anyhow, bail, Context, Result};
 use console::style;
 use dialoguer::theme::ColorfulTheme;
 use glob::glob;
+use indexmap::IndexSet;
 use indicatif::ProgressBar;
+use itertools::Itertools;
 use pathdiff::diff_paths;
+use std::{fs, path::PathBuf, time::Duration};
 
 use crate::app::App;
 
 #[derive(clap::Args)]
 pub struct Args {
-    /// Files to pull
+    /// Files to pull (glob pattern)
+    ///
+    /// Exact duplicates are removed.
     #[arg(required = true)]
-    file: String,
+    files: Vec<String>,
+    /// Treat all patterns as literals instead of as glob patterns.
+    #[arg(long, short = 'F')]
+    fixed_strings: bool,
 }
 
 pub fn run(app: &App, args: Args) -> Result<()> {
-    let files = args.file;
-
     let pb = app
         .multi_progress
         .add(ProgressBar::new_spinner())
@@ -29,8 +33,22 @@ pub fn run(app: &App, args: Args) -> Result<()> {
     let mut count = 0;
     let mut skipped = 0;
 
-    for entry in glob(&files)? {
-        let entry = entry?;
+    let entries = args
+        .files
+        .iter()
+        .map(|file_spec| {
+            if args.fixed_strings {
+                Ok(vec![PathBuf::from(file_spec)])
+            } else {
+                glob(&*file_spec)?
+                    .map(|x| x.map_err(anyhow::Error::new))
+                    .collect::<Result<Vec<_>, _>>()
+            }
+        })
+        .flatten_ok::<Vec<_>, _>()
+        // using IndexSet implicitly removes exact duplicates, but not different names for the same file
+        .collect::<Result<IndexSet<_>, _>>()?;
+    for entry in entries {
         let absolute_entry = fs::canonicalize(&entry)?;
 
         let diff =
