@@ -24,4 +24,4 @@ In this case, luckperms has the id of `28140` - but you can paste it with the na
 | --------- | ------------------ | ----------------------------------------------------------- |
 | `type`    | `"spigot"`         |                                                             |
 | `id`      | string             | ID of the project                                          |
-| `version` | string/`"latest"`  | Version ID (not name), `"latest"` to always use the latest version |
+| `version` | string/`"latest"`  | Version name (eg. `"1.4.1"`), `"latest"` to always use the latest version |
