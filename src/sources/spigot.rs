@@ -7,7 +7,8 @@ use crate::app::{App, CacheStrategy, ResolvedFile};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SpigotVersion {
-    pub uuid: String,
+    #[serde(default)]
+    pub uuid: Option<String>,
     pub name: String,
     pub resource: u64,
     pub id: u64,
