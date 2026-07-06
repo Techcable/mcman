@@ -26,6 +26,9 @@ pub struct Args {
     /// Answer yes to all overwrite prompts.
     #[arg(long)]
     yes_overwrite: bool,
+    /// Show what would be pulled without actually copying any files.
+    #[arg(long)]
+    dry_run: bool,
 }
 
 pub fn run(app: &App, args: Args) -> Result<()> {
@@ -76,14 +79,13 @@ pub fn run(app: &App, args: Args) -> Result<()> {
         destination.push("config");
         destination.extend(iter);
 
-        fs::create_dir_all(destination.parent().unwrap()).context("Failed to create dirs")?;
-
         if destination.exists() {
             if (args.yes_overwrite || args.yes)
-                || app.confirm(&format!(
-                    "File '{}' already exists, overwrite?",
-                    destination.display()
-                ))?
+                || (!args.dry_run
+                    && app.confirm(&format!(
+                        "File '{}' already exists, overwrite?",
+                        destination.display()
+                    ))?)
             {
                 app.info(format!("Overwriting {}", destination.display()));
                 overwritten += 1;
@@ -97,7 +99,10 @@ pub fn run(app: &App, args: Args) -> Result<()> {
             }
         }
 
-        fs::copy(&entry, &destination)?;
+        if !args.dry_run {
+            fs::create_dir_all(destination.parent().unwrap()).context("Failed to create dirs")?;
+            fs::copy(&entry, &destination)?;
+        }
 
         app.multi_progress.println(format!(
             " {} {} {} {}",
@@ -105,12 +110,9 @@ pub fn run(app: &App, args: Args) -> Result<()> {
             style(&diff.to_string_lossy()).dim(),
             style("=>").bold(),
             style(
-                diff_paths(
-                    fs::canonicalize(&destination)?,
-                    fs::canonicalize(&app.server.path)?
-                )
-                .unwrap_or_default()
-                .to_string_lossy()
+                diff_paths(&destination, &app.server.path)
+                    .unwrap_or_default()
+                    .to_string_lossy()
             )
             .dim()
         ))?;
@@ -119,8 +121,9 @@ pub fn run(app: &App, args: Args) -> Result<()> {
     }
 
     pb.finish_with_message(format!(
-        " {} Pulled {} files to {}",
+        " {} {} {} files to {}",
         ColorfulTheme::default().picked_item_prefix,
+        if args.dry_run { "Would pull" } else { "Pulled" },
         count,
         style("config/").bold(),
     ));
