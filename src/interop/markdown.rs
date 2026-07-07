@@ -286,7 +286,15 @@ impl MarkdownAPI<'_> {
             Downloadable::CurseForge { id, version } => {
                 let proj = self.0.curserinth().fetch_project(id).await?;
 
-                (format!("{} <sup>[CF](https://www.curseforge.com/minecraft/mc-mods/{id})</sup>", proj.title, id = proj.slug), sanitize(&proj.description)?, version.clone())
+                (
+                    format!(
+                        "{} <sup>[CF](https://www.curseforge.com/minecraft/mc-mods/{id})</sup>",
+                        proj.title,
+                        id = proj.slug
+                    ),
+                    sanitize(&proj.description)?,
+                    version.clone(),
+                )
             }
 
             Downloadable::Spigot { id, version } => {

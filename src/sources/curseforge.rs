@@ -123,8 +123,7 @@ impl CurseForgeAPI<'_> {
                 if let Some(loader_name) = loader {
                     v.game_versions.iter().any(|gv| {
                         let gv_lower = gv.to_lowercase();
-                        gv_lower == loader_name
-                            || (loader_name == "quilt" && gv_lower == "fabric")
+                        gv_lower == loader_name || (loader_name == "quilt" && gv_lower == "fabric")
                     })
                 } else {
                     true
@@ -167,10 +166,9 @@ impl CurseForgeAPI<'_> {
                 .map_err(|_| anyhow!("Invalid CurseForge file ID: {version}"))?;
 
             let files = self.fetch_files_by_ids(vec![file_id]).await?;
-            files
-                .into_iter()
-                .next()
-                .ok_or_else(|| anyhow!("Version '{version}' not found for CurseForge project '{id}'"))
+            files.into_iter().next().ok_or_else(|| {
+                anyhow!("Version '{version}' not found for CurseForge project '{id}'")
+            })
         }
     }
 

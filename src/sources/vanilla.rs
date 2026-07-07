@@ -1,7 +1,10 @@
 use crate::app::{App, CacheStrategy, ResolvedFile};
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, collections::{BTreeMap, HashMap}};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, HashMap},
+};
 
 pub struct VanillaAPI<'a>(pub &'a App);
 

@@ -1,4 +1,7 @@
-use std::{borrow::Cow, collections::{BTreeMap, HashMap}};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, HashMap},
+};
 
 use anyhow::{anyhow, bail, Result};
 use indexmap::IndexMap;
@@ -55,7 +58,10 @@ const CACHE_DIR: &str = "papermc";
 // into `fill.papermc.io` URL paths, so reject anything outside a conservative
 // allowlist to avoid path traversal / SSRF-adjacent requests.
 fn validate_segment(kind: &str, s: &str) -> Result<()> {
-    if s.is_empty() || s.chars().any(|c| !matches!(c, 'a'..='z'|'A'..='Z'|'0'..='9'|'.'|'-'|'_')) {
+    if s.is_empty()
+        || s.chars()
+            .any(|c| !matches!(c, 'a'..='z'|'A'..='Z'|'0'..='9'|'.'|'-'|'_'))
+    {
         bail!("Invalid PaperMC {kind}: {s:?}");
     }
     Ok(())
@@ -157,10 +163,7 @@ impl PaperMCAPI<'_> {
                 path: cached_file_path,
             },
             size: Some(download.size),
-            hashes: BTreeMap::from([(
-                String::from("sha256"),
-                download.checksums.sha256.clone(),
-            )]),
+            hashes: BTreeMap::from([(String::from("sha256"), download.checksums.sha256.clone())]),
         })
     }
 }

@@ -20,9 +20,8 @@ pub enum HangarError {
     #[error(transparent)]
     Request(#[from] reqwest::Error),
     #[error(transparent)]
-    Deser(#[from] serde_json::Error)
-    // #[error("{0}")]
-    // APIError(String),
+    Deser(#[from] serde_json::Error), // #[error("{0}")]
+                                      // APIError(String),
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
@@ -200,7 +199,7 @@ pub enum PlatformVersionDownload {
 impl<'de> serde::Deserialize<'de> for PlatformVersionDownload {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
-        D: Deserializer<'de>
+        D: Deserializer<'de>,
     {
         use serde::de::Error;
         // This manual implementation gives better error messages than #[serde(untagged)] does
@@ -209,17 +208,19 @@ impl<'de> serde::Deserialize<'de> for PlatformVersionDownload {
             serde::de::Error::custom("Missing `file_info` for download (is it external?)")
         })?;
         match (raw.download_url, raw.external_url) {
-            (None, None) => Err(D::Error::custom("A download must have at least one of `external_url` or `download_url`")),
+            (None, None) => Err(D::Error::custom(
+                "A download must have at least one of `external_url` or `download_url`",
+            )),
             // Prefer hangar download url when present
             (Some(download_url), _) => Ok(PlatformVersionDownload::Hangar {
                 download_url,
-                file_info
+                file_info,
             }),
             // Revert to external url when hangar URL is missing
             (None, Some(external_url)) => Ok(PlatformVersionDownload::External {
                 file_info,
-                external_url
-            })
+                external_url,
+            }),
         }
     }
 }
