@@ -1,7 +1,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use console::style;
 use dialoguer::theme::ColorfulTheme;
-use glob::glob;
+use glob::{glob, Pattern};
 use indexmap::IndexSet;
 use indicatif::ProgressBar;
 use itertools::Itertools;
@@ -41,6 +41,15 @@ pub fn run(app: &App, args: Args) -> Result<()> {
 
     let mut count = 0;
     let mut overwritten = 0;
+    let mut ignored = 0;
+
+    let ignore_patterns = app
+        .server
+        .options
+        .pull_ignore
+        .iter()
+        .map(|p| Pattern::new(p).map_err(anyhow::Error::new))
+        .collect::<Result<Vec<_>, _>>()?;
 
     let entries = args
         .files
@@ -72,12 +81,25 @@ pub fn run(app: &App, args: Args) -> Result<()> {
             bail!("You aren't inside server/");
         }
 
-        let mut destination = PathBuf::new();
         let mut iter = diff.components();
         iter.next().expect("Path to have atleast 1 component");
+        let relative: PathBuf = iter.collect();
+        let relative_str = relative.to_string_lossy();
+
+        if ignore_patterns.iter().any(|p| p.matches(&relative_str)) {
+            app.multi_progress.println(format!(
+                " {} {}",
+                style("Ignored").dim(),
+                style(&relative_str).dim()
+            ))?;
+            ignored += 1;
+            continue;
+        }
+
+        let mut destination = PathBuf::new();
         destination.push(&app.server.path);
         destination.push("config");
-        destination.extend(iter);
+        destination.push(&relative);
 
         if destination.exists() {
             if (args.yes_overwrite || args.yes)
@@ -130,6 +152,10 @@ pub fn run(app: &App, args: Args) -> Result<()> {
 
     if overwritten != 0 {
         app.warn(format!("Overwrote {overwritten} files"));
+    }
+
+    if ignored != 0 {
+        app.info(format!("Ignored {ignored} files"));
     }
 
     Ok(())

@@ -85,6 +85,10 @@ pub struct ServerOptions {
         skip_serializing_if = "is_default_stop_command"
     )]
     pub stop_command: String,
+
+    /// Glob patterns (relative to `server/`) of files to always skip in `mcman pull`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pull_ignore: Vec<String>,
 }
 
 pub fn default_success_line() -> String {
