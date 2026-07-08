@@ -29,6 +29,9 @@ pub struct Args {
     /// Show what would be pulled without actually copying any files.
     #[arg(long)]
     dry_run: bool,
+    /// Suppress output for ignored files.
+    #[arg(long, short = 'q')]
+    quiet: bool,
 }
 
 pub fn run(app: &App, args: Args) -> Result<()> {
@@ -87,11 +90,13 @@ pub fn run(app: &App, args: Args) -> Result<()> {
         let relative_str = relative.to_string_lossy();
 
         if ignore_patterns.iter().any(|p| p.matches(&relative_str)) {
-            app.multi_progress.println(format!(
-                " {} {}",
-                style("Ignored").dim(),
-                style(&relative_str).dim()
-            ))?;
+            if !args.quiet {
+                app.multi_progress.println(format!(
+                    " {} {}",
+                    style("Ignored").dim(),
+                    style(&relative_str).dim()
+                ))?;
+            }
             ignored += 1;
             continue;
         }
@@ -109,14 +114,18 @@ pub fn run(app: &App, args: Args) -> Result<()> {
                         destination.display()
                     ))?)
             {
-                app.info(format!("Overwriting {}", destination.display()));
+                if !args.quiet {
+                    app.info(format!("Overwriting {}", destination.display()));
+                }
                 overwritten += 1;
             } else {
-                app.multi_progress.println(format!(
-                    " {} {}",
-                    style("Skipped overwriting").dim(),
-                    destination.display(),
-                ))?;
+                if !args.quiet {
+                    app.multi_progress.println(format!(
+                        " {} {}",
+                        style("Skipped overwriting").dim(),
+                        destination.display(),
+                    ))?;
+                }
                 continue;
             }
         }
