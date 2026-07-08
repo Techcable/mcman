@@ -192,7 +192,9 @@ pub enum PlatformVersionDownload {
 
     #[serde(rename_all = "camelCase")]
     External {
-        file_info: FileInfo,
+        // Purely external downloads (eg. mirrored to GitHub/dev.bukkit.org) don't
+        // always have Hangar-computed file metadata for their upload.
+        file_info: Option<FileInfo>,
         external_url: String,
     },
 }
@@ -204,21 +206,23 @@ impl<'de> serde::Deserialize<'de> for PlatformVersionDownload {
         use serde::de::Error;
         // This manual implementation gives better error messages than #[serde(untagged)] does
         let raw = <RawPlatformVersionDownload as Deserialize<'de>>::deserialize(deserializer)?;
-        let file_info = raw.file_info.ok_or_else(|| {
-            serde::de::Error::custom("Missing `file_info` for download (is it external?)")
-        })?;
         match (raw.download_url, raw.external_url) {
             (None, None) => Err(D::Error::custom(
                 "A download must have at least one of `external_url` or `download_url`",
             )),
             // Prefer hangar download url when present
-            (Some(download_url), _) => Ok(PlatformVersionDownload::Hangar {
-                download_url,
-                file_info,
-            }),
+            (Some(download_url), _) => {
+                let file_info = raw.file_info.ok_or_else(|| {
+                    D::Error::custom("Missing `file_info` for hangar-hosted download")
+                })?;
+                Ok(PlatformVersionDownload::Hangar {
+                    download_url,
+                    file_info,
+                })
+            }
             // Revert to external url when hangar URL is missing
             (None, Some(external_url)) => Ok(PlatformVersionDownload::External {
-                file_info,
+                file_info: raw.file_info,
                 external_url,
             }),
         }
@@ -235,9 +239,10 @@ impl PlatformVersionDownload {
     }
 
     #[must_use]
-    pub fn get_file_info(&self) -> FileInfo {
+    pub fn get_file_info(&self) -> Option<FileInfo> {
         match self.clone() {
-            Self::Hangar { file_info, .. } | Self::External { file_info, .. } => file_info,
+            Self::Hangar { file_info, .. } => Some(file_info),
+            Self::External { file_info, .. } => file_info,
         }
     }
 }
@@ -466,6 +471,24 @@ impl HangarAPI<'_> {
         Ok(version)
     }
 
+    /// Fetches the newest published version for this project's platform, without
+    /// restricting to versions that declare support for the exact current
+    /// `mc_version` (unlike `fetch_hangar_version(id, "latest")`, which is used to
+    /// pick a version to actually install and so must be compatible).
+    ///
+    /// Used by the outdated-check to still report a newer release exists even when
+    /// it hasn't (yet) been tagged as supporting this server's Minecraft version.
+    pub async fn fetch_newest_version(&self, id: &str) -> Result<ProjectVersion> {
+        get_project_version(
+            &self.0.http_client,
+            id,
+            Some(self.get_platform_filter()),
+            None,
+            None,
+        )
+        .await
+    }
+
     pub fn get_platform(&self) -> Option<Platform> {
         match &self.0.server.jar {
             ServerType::Waterfall {} => Some(Platform::Waterfall),
@@ -505,17 +528,40 @@ impl HangarAPI<'_> {
                 version.name
             ))?;
 
-        let cached_file_path = format!("{id}/{}/{}", version.name, download.get_file_info().name);
+        let url = download.get_url();
+
+        let (filename, size, hashes) = match download.get_file_info() {
+            Some(file_info) => (
+                file_info.name,
+                Some(file_info.size_bytes),
+                BTreeMap::from([("sha256".to_owned(), file_info.sha256_hash)]),
+            ),
+            // Purely external downloads don't always carry Hangar-computed file
+            // metadata, so fall back to guessing a filename from the URL.
+            None => (
+                url.split('?')
+                    .next()
+                    .unwrap_or(&url)
+                    .split('/')
+                    .next_back()
+                    .unwrap_or(&url)
+                    .to_owned(),
+                None,
+                BTreeMap::new(),
+            ),
+        };
+
+        let cached_file_path = format!("{id}/{}/{}", version.name, filename);
 
         Ok(ResolvedFile {
-            url: download.get_url(),
-            filename: download.get_file_info().name,
+            url,
+            filename,
             cache: CacheStrategy::File {
                 namespace: Cow::Borrowed("hangar"),
                 path: cached_file_path,
             },
-            size: Some(download.get_file_info().size_bytes),
-            hashes: BTreeMap::from([("sha256".to_owned(), download.get_file_info().sha256_hash)]),
+            size,
+            hashes,
         })
     }
 }

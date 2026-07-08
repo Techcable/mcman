@@ -25,6 +25,7 @@ nav:
     - import url|mrpack|packwiz: commands/import.md
     - export mrpack|packwiz: commands/export.md
     - info: commands/info.md
+    - outdated: commands/outdated.md
     - pull: commands/pull.md
     - markdown: commands/markdown.md
     - env: commands/env.md

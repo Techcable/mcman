@@ -10,6 +10,7 @@ pub mod import;
 pub mod info;
 pub mod init;
 pub mod markdown;
+pub mod outdated;
 pub mod pull;
 pub mod run;
 pub mod version;

@@ -57,6 +57,8 @@ enum Commands {
     /// Update markdown files with server info
     #[command(visible_alias = "md")]
     Markdown,
+    /// Check plugins/mods/server jar (Modrinth, Hangar, Spigot) for available updates
+    Outdated,
 
     /// Download a downloadable
     #[command(visible_alias = "dl")]
@@ -113,6 +115,7 @@ async fn main() -> Result<()> {
                 Commands::Import(subcommands) => commands::import::run(app, subcommands).await,
                 Commands::Export(commands) => commands::export::run(app, commands).await,
                 Commands::Markdown => commands::markdown::run(app).await,
+                Commands::Outdated => commands::outdated::run(app).await,
                 Commands::World(commands) => commands::world::run(&mut app, commands),
                 Commands::Pull(args) => commands::pull::run(&app, args),
                 Commands::Env(commands) => commands::env::run(&app, commands),

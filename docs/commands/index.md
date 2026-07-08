@@ -24,6 +24,7 @@ This section shows the commands of mcman. You can type `mcman`, `mcman help` or 
 - Info
     - `mcman info`: show info about the server
     - `mcman version`: show version
+    - `mcman outdated`: check plugins/mods/server jar for available updates
 - Cache
     - `mcman cache path`: print cache path
     - `mcman cache open`: open the cache folder
