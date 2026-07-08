@@ -49,8 +49,9 @@ pub fn run(app: &App, args: Args) -> Result<()> {
     let ignore_patterns = app
         .server
         .options
-        .pull_ignore
+        .config_ignore
         .iter()
+        .chain(app.server.options.pull_ignore.iter())
         .map(|p| Pattern::new(p).map_err(anyhow::Error::new))
         .collect::<Result<Vec<_>, _>>()?;
 

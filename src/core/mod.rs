@@ -89,6 +89,10 @@ impl BuildContext<'_> {
             self.bootstrap_files().await?;
         }
 
+        if self.skip_stages.iter().all(|s| s.as_str() != "prune") {
+            self.prune_files().await?;
+        }
+
         if !self.app.server.launcher.disable {
             let startup = self.get_startup_method(&server_jar).await?;
 

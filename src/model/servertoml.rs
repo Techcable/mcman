@@ -86,9 +86,25 @@ pub struct ServerOptions {
     )]
     pub stop_command: String,
 
-    /// Glob patterns (relative to `server/`) of files to always skip in `mcman pull`.
+    /// Glob patterns (relative to `server/`) of files not managed by `config/`.
+    ///
+    /// Skipped by `mcman pull`, and protected from deletion by build-time pruning
+    /// (see `build_prune_include`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub config_ignore: Vec<String>,
+
+    /// Glob patterns (relative to `server/`) of files to additionally skip in `mcman pull`,
+    /// on top of `config_ignore`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub pull_ignore: Vec<String>,
+
+    /// Glob patterns (relative to `server/`) scoping which files `mcman build` is allowed
+    /// to delete when they're no longer present in `config/`.
+    ///
+    /// Empty by default, meaning build never prunes files. Patterns matching `config_ignore`
+    /// are never pruned even if they fall within this scope.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub build_prune_include: Vec<String>,
 }
 
 pub fn default_success_line() -> String {

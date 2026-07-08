@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
+use glob::Pattern;
 use indicatif::{ProgressBar, ProgressStyle};
 use pathdiff::diff_paths;
 use tokio::fs;
@@ -63,6 +64,73 @@ impl BuildContext<'_> {
         self.app.success("Bootstrapping complete");
 
         self.app.ci("::endgroup::");
+
+        Ok(())
+    }
+
+    /// Deletes files under `build_prune_include` scope from the output directory
+    /// that are no longer present in any `config/` source, protecting anything
+    /// matching `config_ignore`.
+    pub async fn prune_files(&mut self) -> Result<()> {
+        let include_patterns = self
+            .app
+            .server
+            .options
+            .build_prune_include
+            .iter()
+            .map(|p| Pattern::new(p).map_err(anyhow::Error::new))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if include_patterns.is_empty() {
+            return Ok(());
+        }
+
+        let ignore_patterns = self
+            .app
+            .server
+            .options
+            .config_ignore
+            .iter()
+            .map(|p| Pattern::new(p).map_err(anyhow::Error::new))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let bootstrapped: std::collections::HashSet<_> =
+            self.new_lockfile.files.iter().map(|f| &f.path).collect();
+
+        for entry in WalkDir::new(&self.output_dir) {
+            let entry = entry.map_err(|e| {
+                anyhow!(
+                    "Can't walk directory/file: {}",
+                    &e.path().unwrap_or(Path::new("<unknown>")).display()
+                )
+            })?;
+
+            if entry.file_type().is_dir() {
+                continue;
+            }
+
+            let path = entry.path();
+            let rel_path =
+                diff_paths(path, &self.output_dir).ok_or(anyhow!("Cannot diff paths"))?;
+            let rel_str = rel_path.to_string_lossy();
+
+            if !include_patterns.iter().any(|p| p.matches(&rel_str)) {
+                continue;
+            }
+
+            if ignore_patterns.iter().any(|p| p.matches(&rel_str)) {
+                continue;
+            }
+
+            if bootstrapped.contains(&rel_path) {
+                continue;
+            }
+
+            fs::remove_file(path)
+                .await
+                .context(format!("Pruning '{}'", path.display()))?;
+            self.app.log(format!("Pruned {rel_str}"));
+        }
 
         Ok(())
     }
