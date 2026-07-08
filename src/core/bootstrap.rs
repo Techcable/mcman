@@ -97,6 +97,8 @@ impl BuildContext<'_> {
         let bootstrapped: std::collections::HashSet<_> =
             self.new_lockfile.files.iter().map(|f| &f.path).collect();
 
+        let mut candidates = Vec::new();
+
         for entry in WalkDir::new(&self.output_dir) {
             let entry = entry.map_err(|e| {
                 anyhow!(
@@ -109,10 +111,10 @@ impl BuildContext<'_> {
                 continue;
             }
 
-            let path = entry.path();
+            let path = entry.path().to_path_buf();
             let rel_path =
-                diff_paths(path, &self.output_dir).ok_or(anyhow!("Cannot diff paths"))?;
-            let rel_str = rel_path.to_string_lossy();
+                diff_paths(&path, &self.output_dir).ok_or(anyhow!("Cannot diff paths"))?;
+            let rel_str = rel_path.to_string_lossy().into_owned();
 
             if !include_patterns.iter().any(|p| p.matches(&rel_str)) {
                 continue;
@@ -126,10 +128,31 @@ impl BuildContext<'_> {
                 continue;
             }
 
-            fs::remove_file(path)
+            candidates.push((path, rel_str));
+        }
+
+        if candidates.is_empty() {
+            return Ok(());
+        }
+
+        if !self.yes
+            && !self.app.confirm(&format!(
+                "Prune {} file(s) no longer present in config/?",
+                candidates.len()
+            ))?
+        {
+            self.app.warn("Skipped pruning");
+            return Ok(());
+        }
+
+        for (path, rel_str) in candidates {
+            fs::remove_file(&path)
                 .await
                 .context(format!("Pruning '{}'", path.display()))?;
-            self.app.log(format!("Pruned {rel_str}"));
+
+            if !self.quiet {
+                self.app.log(format!("Pruned {rel_str}"));
+            }
         }
 
         Ok(())

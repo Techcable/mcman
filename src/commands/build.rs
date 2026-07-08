@@ -15,6 +15,12 @@ pub struct BuildArgs {
     #[arg(long)]
     /// Don't skip downloading already downloaded jars
     force: bool,
+    /// Answer yes to all confirmation prompts (e.g. pruning files)
+    #[arg(long, short = 'y')]
+    yes: bool,
+    /// Suppress non-essential output (e.g. per-file pruning logs)
+    #[arg(long, short = 'q')]
+    quiet: bool,
 }
 
 impl BuildArgs {
@@ -28,6 +34,8 @@ impl BuildArgs {
             app,
             force: self.force,
             skip_stages: self.skip,
+            yes: self.yes,
+            quiet: self.quiet,
             output_dir,
             lockfile: Lockfile::default(),
             new_lockfile: Lockfile::default(),

@@ -26,6 +26,10 @@ pub struct BuildContext<'a> {
 
     pub force: bool,
     pub skip_stages: Vec<String>,
+    /// Skip confirmation prompts (e.g. before pruning files).
+    pub yes: bool,
+    /// Suppress non-essential output (e.g. per-file pruning logs).
+    pub quiet: bool,
     // TODO: Use later?
     pub _server_process: Option<Child>,
 }
