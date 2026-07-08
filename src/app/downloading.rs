@@ -53,6 +53,29 @@ impl App {
             .await
     }
 
+    /// Like [`Self::download`], but reuses an already-resolved lockfile entry
+    /// instead of calling `resolve_source` (skipping the API call) when one is given.
+    pub async fn download_with_cache(
+        &self,
+        resolvable: &(impl Resolvable + ToString + Debug),
+        cached: Option<ResolvedFile>,
+        destination: PathBuf,
+        progress_bar: ProgressBar,
+    ) -> Result<ResolvedFile> {
+        let Some(resolved) = cached else {
+            return self.download(resolvable, destination, progress_bar).await;
+        };
+
+        progress_bar.set_style(ProgressStyle::with_template(
+            "{spinner:.blue} {prefix} {msg}...",
+        )?);
+        progress_bar.set_prefix(ProgressPrefix::Resolving);
+        progress_bar.set_message(resolvable.to_string());
+
+        self.download_resolved(resolved, destination, progress_bar)
+            .await
+    }
+
     pub fn resolve_cached_file(&self, cache: &CacheStrategy) -> Option<(PathBuf, bool)> {
         match cache {
             CacheStrategy::File { namespace, path } => self

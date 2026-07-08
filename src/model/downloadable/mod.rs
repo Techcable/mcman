@@ -94,6 +94,33 @@ pub fn artifact() -> String {
     "artifact".to_owned()
 }
 
+impl Downloadable {
+    /// Whether this spec asks for an explicit version/build, as opposed to a
+    /// floating reference (eg. "latest"/"first") that must always be re-checked
+    /// against the source no matter what the lockfile has cached.
+    ///
+    /// This alone does NOT mean a cached lockfile entry can be trusted without
+    /// re-resolving: some sources (Spigot, Maven) never populate
+    /// `ResolvedFile::hashes` even for an explicit version, and Jenkins only
+    /// does when that particular build has fingerprinting enabled. Callers
+    /// should not treat an entry as skip-eligible on `is_pinned()` alone —
+    /// also check that the cached `ResolvedFile::hashes` is non-empty.
+    pub fn is_pinned(&self) -> bool {
+        match self {
+            Self::Url { .. } | Self::Hangar { .. } => true,
+            Self::GithubRelease { tag, .. } => tag != "latest",
+            Self::Modrinth { version, .. }
+            | Self::CurseRinth { version, .. }
+            | Self::CurseForge { version, .. }
+            | Self::Spigot { version, .. }
+            | Self::Maven { version, .. } => version != "latest",
+            Self::Jenkins {
+                build, artifact, ..
+            } => build != "latest" && artifact != "first",
+        }
+    }
+}
+
 impl Resolvable for Downloadable {
     async fn resolve_source(&self, app: &App) -> Result<ResolvedFile> {
         match self {

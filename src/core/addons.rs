@@ -1,4 +1,8 @@
-use std::{collections::HashSet, io::ErrorKind, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    io::ErrorKind,
+    time::Duration,
+};
 
 use anyhow::Result;
 use indicatif::{FormattedDuration, ProgressBar, ProgressIterator, ProgressStyle};
@@ -23,6 +27,10 @@ impl BuildContext<'_> {
                 hash_set
             },
         );
+
+        // pinned addons unchanged since the last build can reuse their lockfile
+        // entry instead of re-resolving against the source's API
+        let locked: HashMap<_, _> = addons.iter().map(|(dl, res)| (dl, res)).collect();
 
         if server_list.is_empty() && existing_files.is_empty() {
             return Ok(());
@@ -52,8 +60,17 @@ impl BuildContext<'_> {
         let pb = self.app.multi_progress.add(pb);
 
         for addon in server_list.iter().progress_with(pb.clone()) {
+            let cached = if !self.force && addon.is_pinned() {
+                locked
+                    .get(addon)
+                    .filter(|res| !res.hashes.is_empty())
+                    .map(|res| (*res).clone())
+            } else {
+                None
+            };
+
             let (_path, resolved) = self
-                .downloadable(addon, addon_type.folder(), Some(&pb))
+                .downloadable_with_cache(addon, cached, addon_type.folder(), Some(&pb))
                 .await?;
 
             files_list.insert(resolved.filename.clone());

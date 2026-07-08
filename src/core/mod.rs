@@ -161,6 +161,19 @@ impl BuildContext<'_> {
         folder_path: &str,
         parent_progress: Option<&ProgressBar>,
     ) -> Result<(PathBuf, ResolvedFile)> {
+        self.downloadable_with_cache(resolvable, None, folder_path, parent_progress)
+            .await
+    }
+
+    /// Like [`Self::downloadable`], but when `cached` is `Some`, reuses that
+    /// already-resolved lockfile entry instead of re-resolving via the source's API.
+    pub async fn downloadable_with_cache(
+        &self,
+        resolvable: &(impl Resolvable + Debug + ToString),
+        cached: Option<ResolvedFile>,
+        folder_path: &str,
+        parent_progress: Option<&ProgressBar>,
+    ) -> Result<(PathBuf, ResolvedFile)> {
         let progress_bar = if let Some(parent) = parent_progress {
             self.app
                 .multi_progress
@@ -171,7 +184,12 @@ impl BuildContext<'_> {
 
         let result = self
             .app
-            .download(resolvable, self.output_dir.join(folder_path), progress_bar)
+            .download_with_cache(
+                resolvable,
+                cached,
+                self.output_dir.join(folder_path),
+                progress_bar,
+            )
             .await?;
 
         Ok((
