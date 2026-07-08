@@ -1,4 +1,5 @@
 use std::{
+    borrow::Cow,
     path::{Path, PathBuf},
     time::{Duration, SystemTime},
 };
@@ -10,9 +11,19 @@ use pathdiff::diff_paths;
 use tokio::fs;
 use walkdir::WalkDir;
 
-use crate::{model::BootstrappedFile, util::dollar_repl};
+use crate::{
+    model::BootstrappedFile,
+    util::{dollar_repl, SelectItem},
+};
 
 use super::BuildContext;
+
+#[derive(Clone, Copy, PartialEq)]
+enum PruneChoice {
+    Yes,
+    No,
+    All,
+}
 
 impl BuildContext<'_> {
     pub async fn bootstrap_files(&mut self) -> Result<()> {
@@ -135,17 +146,29 @@ impl BuildContext<'_> {
             return Ok(());
         }
 
-        if !self.yes
-            && !self.app.confirm(&format!(
-                "Prune {} file(s) no longer present in config/?",
-                candidates.len()
-            ))?
-        {
-            self.app.warn("Skipped pruning");
-            return Ok(());
-        }
+        let mut confirm_all = self.yes;
 
         for (path, rel_str) in candidates {
+            if !confirm_all {
+                let choice = self.app.select(
+                    &format!("Prune '{rel_str}'?"),
+                    &[
+                        SelectItem(PruneChoice::Yes, Cow::Borrowed("Yes")),
+                        SelectItem(PruneChoice::No, Cow::Borrowed("No")),
+                        SelectItem(
+                            PruneChoice::All,
+                            Cow::Borrowed("Yes, and confirm all remaining"),
+                        ),
+                    ],
+                )?;
+
+                match choice {
+                    PruneChoice::No => continue,
+                    PruneChoice::All => confirm_all = true,
+                    PruneChoice::Yes => {}
+                }
+            }
+
             fs::remove_file(&path)
                 .await
                 .context(format!("Pruning '{}'", path.display()))?;
