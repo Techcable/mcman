@@ -31,7 +31,7 @@ pub fn run(app: &App, args: Args) -> Result<()> {
     pb.enable_steady_tick(Duration::from_millis(250));
 
     let mut count = 0;
-    let mut skipped = 0;
+    let mut overwritten = 0;
 
     let entries = args
         .files
@@ -77,9 +77,14 @@ pub fn run(app: &App, args: Args) -> Result<()> {
                 "File '{}' already exists, overwrite?",
                 destination.display()
             ))? {
-                app.info(format!("Skipped {}", destination.display()));
-                skipped += 1;
+                app.info(format!("Overwriting {}", destination.display()));
+                overwritten += 1;
             } else {
+                app.multi_progress.println(format!(
+                    " {} {}",
+                    style("Skipped overwriting").dim(),
+                    destination.display(),
+                ))?;
                 continue;
             }
         }
@@ -112,8 +117,8 @@ pub fn run(app: &App, args: Args) -> Result<()> {
         style("config/").bold(),
     ));
 
-    if skipped != 0 {
-        app.warn(format!("Skipped {skipped} files"));
+    if overwritten != 0 {
+        app.warn(format!("Overwrote {overwritten} files"));
     }
 
     Ok(())
