@@ -76,7 +76,7 @@ impl Downloadable {
             Self::Modrinth { id, version }
             | Self::CurseRinth { id, version }
             | Self::CurseForge { id, version }
-            | Self::Hangar { id, version }
+            | Self::Hangar { id, version, .. }
             | Self::Spigot { id, version } => (id.clone(), None, Some(version.clone())),
 
             Self::Jenkins {

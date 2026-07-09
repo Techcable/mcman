@@ -18,7 +18,7 @@ const API_V1: &str = "https://hangar.papermc.io/api/v1";
 /// The channel name Hangar projects conventionally use for stable releases (as
 /// opposed to eg. `Beta`, `Alpha`, `Snapshot`). Used to filter out non-release
 /// channels by default when searching for the newest version of a project.
-const RELEASE_CHANNEL: &str = "Release";
+pub(crate) const RELEASE_CHANNEL: &str = "Release";
 
 #[derive(Error, Debug)]
 pub enum HangarError {
@@ -483,21 +483,58 @@ impl HangarAPI<'_> {
     ///
     /// Used by the outdated-check to still report a newer release exists even when
     /// it hasn't (yet) been tagged as supporting this server's Minecraft version.
+    pub async fn fetch_newest_version_any_channel(&self, id: &str) -> Result<ProjectVersion> {
+        get_project_version(
+            &self.0.http_client,
+            id,
+            Some(self.get_platform_filter()),
+            None,
+            None,
+        )
+        .await
+    }
+
+    /// Like `fetch_newest_version_any_channel`, but restricted to the newest version
+    /// found across the given set of channels (eg. `["Release"]`, or `["Release",
+    /// "Beta"]`). Hangar's API only accepts one `channel` filter per request, so this
+    /// issues one request per channel and keeps whichever result is newest.
     ///
-    /// By default only the `Release` channel is considered, since Beta/Alpha/Snapshot
-    /// channels aren't meant to be suggested as routine updates. Pass `all_channels`
-    /// to search every channel instead.
-    pub async fn fetch_newest_version(
+    /// A channel that doesn't exist for this project (or simply has no versions for
+    /// this platform) is not distinguishable from Hangar's API, so either case just
+    /// produces a warning and is skipped rather than failing the whole lookup - unless
+    /// *every* channel comes back empty, in which case an error is returned.
+    pub async fn fetch_newest_version_in_channels(
         &self,
         id: &str,
-        all_channels: bool,
+        channels: &[String],
     ) -> Result<ProjectVersion> {
-        let mut filter = self.get_platform_filter();
-        if !all_channels {
-            filter.channel = Some(RELEASE_CHANNEL.to_owned());
+        let mut newest: Option<ProjectVersion> = None;
+
+        for channel in channels {
+            let mut filter = self.get_platform_filter();
+            filter.channel = Some(channel.clone());
+
+            match get_project_version(&self.0.http_client, id, Some(filter), None, None).await {
+                Ok(version) => {
+                    let is_newer = match &newest {
+                        Some(cur) => version.created_at > cur.created_at,
+                        None => true,
+                    };
+                    if is_newer {
+                        newest = Some(version);
+                    }
+                }
+                Err(_) => {
+                    self.0.warn(format!(
+                        "Hangar channel '{channel}' doesn't exist (or has no versions) for project '{id}'"
+                    ));
+                }
+            }
         }
 
-        get_project_version(&self.0.http_client, id, Some(filter), None, None).await
+        newest.ok_or_else(|| {
+            anyhow!("No versions found in any of channels {channels:?} for Hangar project '{id}'")
+        })
     }
 
     pub fn get_platform(&self) -> Option<Platform> {

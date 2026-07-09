@@ -12,8 +12,8 @@ use crate::{
 
 #[derive(clap::Args)]
 pub struct Args {
-    /// Also consider non-release Hangar channels (eg. Beta, Alpha, Snapshot) when
-    /// looking for updates. By default only the Release channel is considered.
+    /// Search every Hangar channel (eg. Beta, Alpha, Snapshot) for updates, ignoring
+    /// each plugin's `channels` setting (which otherwise defaults to `["Release"]`).
     #[arg(long)]
     all_channels: bool,
 }
@@ -73,9 +73,19 @@ async fn check_update(app: &App, target: &CheckTarget, all_channels: bool) -> Re
                 }
             }
         }
-        CheckTarget::Downloadable(Downloadable::Hangar { id, version }) => {
+        CheckTarget::Downloadable(Downloadable::Hangar {
+            id,
+            version,
+            channels,
+        }) => {
             let current = app.hangar().fetch_hangar_version(id, version).await?;
-            let latest = app.hangar().fetch_newest_version(id, all_channels).await?;
+            let latest = if all_channels {
+                app.hangar().fetch_newest_version_any_channel(id).await?
+            } else {
+                app.hangar()
+                    .fetch_newest_version_in_channels(id, channels)
+                    .await?
+            };
 
             if current.name == latest.name {
                 CheckResult::UpToDate

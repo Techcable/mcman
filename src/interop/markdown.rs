@@ -307,7 +307,7 @@ impl MarkdownAPI<'_> {
                 )
             }
 
-            Downloadable::Hangar { id, version } => {
+            Downloadable::Hangar { id, version, .. } => {
                 let proj = crate::sources::hangar::fetch_project(&self.0.http_client, id).await?;
 
                 (

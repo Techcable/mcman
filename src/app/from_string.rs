@@ -41,6 +41,7 @@ impl App {
                     Ok(Downloadable::Hangar {
                         id: id.to_owned(),
                         version: version.to_owned(),
+                        channels: crate::model::default_hangar_channels(),
                     })
                 }
                 ("spigot" | "spiget", id) => {

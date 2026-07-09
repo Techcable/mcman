@@ -52,6 +52,13 @@ pub enum Downloadable {
     Hangar {
         id: String,
         version: String,
+        /// Hangar update channels considered by `mcman outdated` when looking for a
+        /// newer version of this plugin. Defaults to `["Release"]`; add eg. `"Beta"`
+        /// to also be notified about pre-releases. Does not affect build/resolve
+        /// behavior - only which channels count as "up to date" checking.
+        #[serde(default = "default_hangar_channels")]
+        #[serde(skip_serializing_if = "is_default_hangar_channels")]
+        channels: Vec<String>,
     },
 
     #[serde(rename = "ghrel")]
@@ -92,6 +99,14 @@ pub fn first() -> String {
 
 pub fn artifact() -> String {
     "artifact".to_owned()
+}
+
+pub fn default_hangar_channels() -> Vec<String> {
+    vec![crate::sources::hangar::RELEASE_CHANNEL.to_owned()]
+}
+
+pub fn is_default_hangar_channels(channels: &[String]) -> bool {
+    channels == default_hangar_channels()
 }
 
 impl Downloadable {
@@ -140,7 +155,7 @@ impl Resolvable for Downloadable {
             Self::CurseRinth { id, version } => app.curserinth().resolve_source(id, version).await,
             Self::CurseForge { id, version } => app.curseforge().resolve_source(id, version).await,
             Self::Spigot { id, version } => app.spigot().resolve_source(id, version).await,
-            Self::Hangar { id, version } => app.hangar().resolve_source(id, version).await,
+            Self::Hangar { id, version, .. } => app.hangar().resolve_source(id, version).await,
             Self::GithubRelease { repo, tag, asset } => {
                 app.github().resolve_source(repo, tag, asset).await
             }
