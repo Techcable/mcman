@@ -22,9 +22,10 @@ version = "1.2.3"
 channels = ["Release", "Beta"]
 ```
 
-A channel that doesn't exist for the project (or just has no versions) prints
-a warning and is otherwise skipped. Pass `--all-channels` to ignore every
-plugin's `channels` setting and search every channel instead.
+A configured channel other than `Release` that doesn't exist for the project
+(or just has no versions) prints a warning and is otherwise skipped; `Release`
+is assumed to always exist and never warns. Pass `--all-channels` to ignore
+every plugin's `channels` setting and search every channel instead.
 
 Example usage:
 

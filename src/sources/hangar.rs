@@ -503,6 +503,10 @@ impl HangarAPI<'_> {
     /// this platform) is not distinguishable from Hangar's API, so either case just
     /// produces a warning and is skipped rather than failing the whole lookup - unless
     /// *every* channel comes back empty, in which case an error is returned.
+    ///
+    /// `Release` is assumed to always exist (every real Hangar project has one) and
+    /// never warns even on failure, since a lookup failure there just means no
+    /// matching version, not a missing channel.
     pub async fn fetch_newest_version_in_channels(
         &self,
         id: &str,
@@ -524,6 +528,7 @@ impl HangarAPI<'_> {
                         newest = Some(version);
                     }
                 }
+                Err(_) if channel == RELEASE_CHANNEL => {}
                 Err(_) => {
                     self.0.warn(format!(
                         "Hangar channel '{channel}' doesn't exist (or has no versions) for project '{id}'"
