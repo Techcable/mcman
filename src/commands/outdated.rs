@@ -18,26 +18,49 @@ pub struct Args {
     all_channels: bool,
 }
 
+enum CheckTarget {
+    Downloadable(Downloadable),
+    /// The server jar, when it's a PaperMC-family project (paper/velocity/waterfall/folia)
+    /// pinned to an explicit build, resolved through the Fill API.
+    PaperBuild {
+        project: String,
+        build: String,
+    },
+}
+
+impl CheckTarget {
+    fn label(&self) -> String {
+        match self {
+            Self::Downloadable(dl) => dl.to_short_string(),
+            Self::PaperBuild { project, .. } => format!("PaperMC:{project}"),
+        }
+    }
+}
+
 enum CheckResult {
     UpToDate,
     Outdated { current: String, latest: String },
 }
 
-/// Whether `check_update` supports this downloadable: it must come from Modrinth,
-/// Hangar or Spigot, and be pinned to an explicit version rather than a floating
-/// `"latest"` (which is already up to date by definition on every build).
-fn is_checkable(dl: &Downloadable) -> bool {
-    match dl {
-        Downloadable::Modrinth { version, .. }
-        | Downloadable::Hangar { version, .. }
-        | Downloadable::Spigot { version, .. } => version != "latest",
-        _ => false,
+/// Whether `check_update` supports this target: a Modrinth/Hangar/Spigot addon or a
+/// PaperMC-family server jar, pinned to an explicit version/build rather than a
+/// floating `"latest"` (which is already up to date by definition on every build).
+fn is_checkable(target: &CheckTarget) -> bool {
+    match target {
+        CheckTarget::Downloadable(dl) => matches!(
+            dl,
+            Downloadable::Modrinth { version, .. }
+            | Downloadable::Hangar { version, .. }
+            | Downloadable::Spigot { version, .. }
+                if version != "latest"
+        ),
+        CheckTarget::PaperBuild { build, .. } => build != "latest",
     }
 }
 
-async fn check_update(app: &App, dl: &Downloadable, all_channels: bool) -> Result<CheckResult> {
-    Ok(match dl {
-        Downloadable::Modrinth { id, version } => {
+async fn check_update(app: &App, target: &CheckTarget, all_channels: bool) -> Result<CheckResult> {
+    Ok(match target {
+        CheckTarget::Downloadable(Downloadable::Modrinth { id, version }) => {
             let current = app.modrinth().fetch_version(id, version).await?;
             let latest = app.modrinth().fetch_version(id, "latest").await?;
 
@@ -50,7 +73,7 @@ async fn check_update(app: &App, dl: &Downloadable, all_channels: bool) -> Resul
                 }
             }
         }
-        Downloadable::Hangar { id, version } => {
+        CheckTarget::Downloadable(Downloadable::Hangar { id, version }) => {
             let current = app.hangar().fetch_hangar_version(id, version).await?;
             let latest = app.hangar().fetch_newest_version(id, all_channels).await?;
 
@@ -63,7 +86,7 @@ async fn check_update(app: &App, dl: &Downloadable, all_channels: bool) -> Resul
                 }
             }
         }
-        Downloadable::Spigot { id, version } => {
+        CheckTarget::Downloadable(Downloadable::Spigot { id, version }) => {
             let current = app.spigot().fetch_version(id, version).await?;
             let latest = app.spigot().fetch_version(id, "latest").await?;
 
@@ -76,35 +99,70 @@ async fn check_update(app: &App, dl: &Downloadable, all_channels: bool) -> Resul
                 }
             }
         }
-        _ => unreachable!("check_update() called on a non-checkable downloadable"),
+        CheckTarget::PaperBuild { project, build } => {
+            let current = app
+                .papermc()
+                .fetch_build(project, app.mc_version(), build)
+                .await?;
+            let latest = app
+                .papermc()
+                .fetch_build(project, app.mc_version(), "latest")
+                .await?;
+
+            if current.id == latest.id {
+                CheckResult::UpToDate
+            } else {
+                CheckResult::Outdated {
+                    current: format!("build {}", current.id),
+                    latest: format!("build {}", latest.id),
+                }
+            }
+        }
+        CheckTarget::Downloadable(_) => {
+            unreachable!("check_update() called on a non-checkable downloadable")
+        }
     })
 }
 
-/// Reports plugins, mods and the server jar (when pinned to Modrinth, Hangar or
-/// Spigot) that have a newer version available upstream. Read-only: it never
-/// edits server.toml or the lockfile, it only prints what could be updated.
+/// Reports plugins, mods and the server jar (when pinned to Modrinth, Hangar, Spigot,
+/// or a PaperMC-family build) that have a newer version available upstream. Read-only:
+/// it never edits server.toml or the lockfile, it only prints what could be updated.
 pub async fn run(app: App, args: Args) -> Result<()> {
-    let mut targets: Vec<(&'static str, Downloadable)> = Vec::new();
+    let mut targets: Vec<(&'static str, CheckTarget)> = Vec::new();
 
     targets.extend(
         app.get_addons(AddonType::Plugin)
             .into_iter()
-            .map(|dl| ("Plugin", dl)),
+            .map(|dl| ("Plugin", CheckTarget::Downloadable(dl))),
     );
     targets.extend(
         app.get_addons(AddonType::Mod)
             .into_iter()
-            .map(|dl| ("Mod", dl)),
+            .map(|dl| ("Mod", CheckTarget::Downloadable(dl))),
     );
 
-    if let ServerType::Downloadable { inner } = &app.server.jar {
-        targets.push(("Server Jar", inner.clone()));
+    match &app.server.jar {
+        ServerType::Downloadable { inner } => {
+            targets.push(("Server Jar", CheckTarget::Downloadable(inner.clone())));
+        }
+        ServerType::PaperMC { project, build } => {
+            targets.push((
+                "Server Jar",
+                CheckTarget::PaperBuild {
+                    project: project.clone(),
+                    build: build.clone(),
+                },
+            ));
+        }
+        _ => {}
     }
 
-    targets.retain(|(_, dl)| is_checkable(dl));
+    targets.retain(|(_, target)| is_checkable(target));
 
     if targets.is_empty() {
-        app.info("No plugins, mods, or server jar pinned to Modrinth/Hangar/Spigot to check.");
+        app.info(
+            "No plugins, mods, or server jar pinned to Modrinth/Hangar/Spigot/PaperMC to check.",
+        );
         return Ok(());
     }
 
@@ -124,21 +182,22 @@ pub async fn run(app: App, args: Args) -> Result<()> {
         Cow::Borrowed("Latest"),
     ]);
 
-    for (kind, dl) in &targets {
-        pb.set_message(format!("Checking {dl}"));
+    for (kind, target) in &targets {
+        let label = target.label();
+        pb.set_message(format!("Checking {label}"));
 
-        match check_update(&app, dl, args.all_channels).await {
+        match check_update(&app, target, args.all_channels).await {
             Ok(CheckResult::Outdated { current, latest }) => {
                 let mut row = IndexMap::new();
                 row.insert(Cow::Borrowed("Kind"), (*kind).to_owned());
-                row.insert(Cow::Borrowed("Addon"), dl.to_short_string());
+                row.insert(Cow::Borrowed("Addon"), label);
                 row.insert(Cow::Borrowed("Current"), current);
                 row.insert(Cow::Borrowed("Latest"), latest);
                 table.add_from_map(row);
             }
             Ok(CheckResult::UpToDate) => {}
             Err(err) => {
-                app.warn(format!("Failed to check '{dl}' for updates: {err}"));
+                app.warn(format!("Failed to check '{label}' for updates: {err}"));
             }
         }
 

@@ -1,12 +1,14 @@
 # `mcman outdated`
 
-Checks plugins, mods and the server jar (when pinned to a Modrinth, Hangar or
-Spigot version) for newer versions available upstream.
+Checks plugins, mods and the server jar for newer versions available upstream:
+addons pinned to a Modrinth, Hangar or Spigot version, and a PaperMC-family
+server jar (`type = "papermc"`, eg. paper/velocity/waterfall) pinned to an
+explicit `build`, checked through the [Fill API](https://fill.papermc.io/).
 
 This only reports what's outdated - it does not edit `server.toml` or download
-anything. Addons pinned to `"latest"`, or sourced from anything other than
-Modrinth/Hangar/Spigot (CurseForge, URL, Github Releases, Jenkins, Maven), are
-skipped since they're always resolved fresh on the next build.
+anything. Anything pinned to `"latest"`, or sourced from anything else
+(CurseForge, URL, Github Releases, Jenkins, Maven, Purpur, ...), is skipped
+since it's always resolved fresh on the next build.
 
 By default, only a Hangar project's `Release` channel is considered when
 looking for a newer version - Beta/Alpha/Snapshot channels are ignored. Pass
