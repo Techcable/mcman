@@ -10,6 +10,14 @@ use crate::{
     util::md::MarkdownTable,
 };
 
+#[derive(clap::Args)]
+pub struct Args {
+    /// Also consider non-release Hangar channels (eg. Beta, Alpha, Snapshot) when
+    /// looking for updates. By default only the Release channel is considered.
+    #[arg(long)]
+    all_channels: bool,
+}
+
 enum CheckResult {
     UpToDate,
     Outdated { current: String, latest: String },
@@ -27,7 +35,7 @@ fn is_checkable(dl: &Downloadable) -> bool {
     }
 }
 
-async fn check_update(app: &App, dl: &Downloadable) -> Result<CheckResult> {
+async fn check_update(app: &App, dl: &Downloadable, all_channels: bool) -> Result<CheckResult> {
     Ok(match dl {
         Downloadable::Modrinth { id, version } => {
             let current = app.modrinth().fetch_version(id, version).await?;
@@ -44,7 +52,7 @@ async fn check_update(app: &App, dl: &Downloadable) -> Result<CheckResult> {
         }
         Downloadable::Hangar { id, version } => {
             let current = app.hangar().fetch_hangar_version(id, version).await?;
-            let latest = app.hangar().fetch_newest_version(id).await?;
+            let latest = app.hangar().fetch_newest_version(id, all_channels).await?;
 
             if current.name == latest.name {
                 CheckResult::UpToDate
@@ -75,7 +83,7 @@ async fn check_update(app: &App, dl: &Downloadable) -> Result<CheckResult> {
 /// Reports plugins, mods and the server jar (when pinned to Modrinth, Hangar or
 /// Spigot) that have a newer version available upstream. Read-only: it never
 /// edits server.toml or the lockfile, it only prints what could be updated.
-pub async fn run(app: App) -> Result<()> {
+pub async fn run(app: App, args: Args) -> Result<()> {
     let mut targets: Vec<(&'static str, Downloadable)> = Vec::new();
 
     targets.extend(
@@ -119,7 +127,7 @@ pub async fn run(app: App) -> Result<()> {
     for (kind, dl) in &targets {
         pb.set_message(format!("Checking {dl}"));
 
-        match check_update(&app, dl).await {
+        match check_update(&app, dl, args.all_channels).await {
             Ok(CheckResult::Outdated { current, latest }) => {
                 let mut row = IndexMap::new();
                 row.insert(Cow::Borrowed("Kind"), (*kind).to_owned());

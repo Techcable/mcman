@@ -8,6 +8,10 @@ anything. Addons pinned to `"latest"`, or sourced from anything other than
 Modrinth/Hangar/Spigot (CurseForge, URL, Github Releases, Jenkins, Maven), are
 skipped since they're always resolved fresh on the next build.
 
+By default, only a Hangar project's `Release` channel is considered when
+looking for a newer version - Beta/Alpha/Snapshot channels are ignored. Pass
+`--all-channels` to consider every channel instead.
+
 Example usage:
 
 ```sh

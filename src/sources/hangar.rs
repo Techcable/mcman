@@ -15,6 +15,11 @@ use crate::{
 
 const API_V1: &str = "https://hangar.papermc.io/api/v1";
 
+/// The channel name Hangar projects conventionally use for stable releases (as
+/// opposed to eg. `Beta`, `Alpha`, `Snapshot`). Used to filter out non-release
+/// channels by default when searching for the newest version of a project.
+const RELEASE_CHANNEL: &str = "Release";
+
 #[derive(Error, Debug)]
 pub enum HangarError {
     #[error(transparent)]
@@ -478,15 +483,21 @@ impl HangarAPI<'_> {
     ///
     /// Used by the outdated-check to still report a newer release exists even when
     /// it hasn't (yet) been tagged as supporting this server's Minecraft version.
-    pub async fn fetch_newest_version(&self, id: &str) -> Result<ProjectVersion> {
-        get_project_version(
-            &self.0.http_client,
-            id,
-            Some(self.get_platform_filter()),
-            None,
-            None,
-        )
-        .await
+    ///
+    /// By default only the `Release` channel is considered, since Beta/Alpha/Snapshot
+    /// channels aren't meant to be suggested as routine updates. Pass `all_channels`
+    /// to search every channel instead.
+    pub async fn fetch_newest_version(
+        &self,
+        id: &str,
+        all_channels: bool,
+    ) -> Result<ProjectVersion> {
+        let mut filter = self.get_platform_filter();
+        if !all_channels {
+            filter.channel = Some(RELEASE_CHANNEL.to_owned());
+        }
+
+        get_project_version(&self.0.http_client, id, Some(filter), None, None).await
     }
 
     pub fn get_platform(&self) -> Option<Platform> {
