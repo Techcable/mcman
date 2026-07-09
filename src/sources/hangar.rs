@@ -524,17 +524,51 @@ impl HangarAPI<'_> {
                         newest = Some(version);
                     }
                 }
-                Err(_) => {
-                    self.0.warn(format!(
-                        "Hangar channel '{channel}' doesn't exist (or has no versions) for project '{id}'"
-                    ));
-                }
+                Err(_) => self.warn_empty_channel(id, channel).await,
             }
         }
 
         newest.ok_or_else(|| {
             anyhow!("No versions found in any of channels {channels:?} for Hangar project '{id}'")
         })
+    }
+
+    /// Warns that `channel` produced no usable version for `id`, distinguishing
+    /// "channel doesn't exist" from "channel exists but has nothing for this
+    /// project's platform" where possible.
+    ///
+    /// Hangar's public API has no endpoint listing a project's defined channels, so
+    /// this can't be checked directly. Instead it re-queries the same channel without
+    /// the platform filter: `pagination.count` there is a true total (not just this
+    /// page's size), so a nonzero count means the channel does exist and has
+    /// versions - just none for this platform. A zero count either way means the
+    /// channel has no versions at all, which in practice is indistinguishable from it
+    /// not existing (an empty, never-used channel would look identical).
+    async fn warn_empty_channel(&self, id: &str, channel: &str) {
+        let unfiltered_count = fetch_project_versions(
+            &self.0.http_client,
+            id,
+            Some(PlatformFilter {
+                limit: 1,
+                channel: Some(channel.to_owned()),
+                ..Default::default()
+            }),
+        )
+        .await
+        .map_or(0, |resp| resp.pagination.count);
+
+        if unfiltered_count > 0 {
+            let platform = self
+                .get_platform()
+                .map_or_else(|| "this server's platform".to_owned(), |p| p.to_string());
+            self.0.warn(format!(
+                "Hangar channel '{channel}' for project '{id}' has no versions for {platform}"
+            ));
+        } else {
+            self.0.warn(format!(
+                "Hangar channel '{channel}' doesn't exist (or has no versions at all) for project '{id}'"
+            ));
+        }
     }
 
     pub fn get_platform(&self) -> Option<Platform> {
