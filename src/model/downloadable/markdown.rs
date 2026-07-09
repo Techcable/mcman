@@ -73,7 +73,7 @@ impl Downloadable {
                 (repo.clone(), Some(asset.clone()), Some(tag.clone()))
             }
 
-            Self::Modrinth { id, version }
+            Self::Modrinth { id, version, .. }
             | Self::CurseRinth { id, version }
             | Self::CurseForge { id, version }
             | Self::Hangar { id, version, .. }

@@ -82,6 +82,16 @@ pub enum VersionType {
     Alpha,
 }
 
+impl VersionType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Release => "release",
+            Self::Beta => "beta",
+            Self::Alpha => "alpha",
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum ModrinthStatus {
@@ -130,6 +140,8 @@ impl ModrinthWaitRatelimit<reqwest::Response> for reqwest::Response {
 pub struct ModrinthAPI<'a>(pub &'a App);
 
 static API_URL: &str = "https://api.modrinth.com/v2";
+
+pub(crate) const RELEASE_CHANNEL: &str = "release";
 
 impl ModrinthAPI<'_> {
     pub async fn fetch_api<T: DeserializeOwned>(&self, url: &str) -> Result<T> {
@@ -195,6 +207,44 @@ impl ModrinthAPI<'_> {
         };
 
         Ok(version_data)
+    }
+
+    /// Finds the newest version (compatible with this server's `mc_version`/loader)
+    /// whose `version_type` is one of the given channels (eg. `["release"]`, or
+    /// `["release", "beta"]`).
+    ///
+    /// Unlike Hangar, Modrinth's channels are a fixed three-value enum
+    /// (`release`/`beta`/`alpha`) rather than per-project custom channels, so an
+    /// unrecognized entry in `channels` is always a typo and warns immediately
+    /// rather than only on a failed lookup. A recognized channel simply having no
+    /// matching version (eg. no beta ever published) is normal and doesn't warn.
+    pub async fn fetch_newest_version_in_channels(
+        &self,
+        id: &str,
+        channels: &[String],
+    ) -> Result<ModrinthVersion> {
+        for channel in channels {
+            if !["release", "beta", "alpha"].contains(&channel.to_ascii_lowercase().as_str()) {
+                self.0.warn(format!(
+                    "Unknown Modrinth version channel '{channel}' for project '{id}' (expected 'release', 'beta' or 'alpha')"
+                ));
+            }
+        }
+
+        let versions = self.fetch_versions(id).await?;
+
+        versions
+            .into_iter()
+            .find(|v| {
+                channels
+                    .iter()
+                    .any(|c| c.eq_ignore_ascii_case(v.version_type.as_str()))
+            })
+            .ok_or_else(|| {
+                anyhow!(
+                    "No versions found in any of channels {channels:?} for Modrinth project '{id}'"
+                )
+            })
     }
 
     pub async fn fetch_file(

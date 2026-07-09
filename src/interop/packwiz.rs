@@ -187,6 +187,7 @@ impl PackwizInterop<'_> {
                 .map(|ver| Downloadable::Modrinth {
                     id: ver.project_id.clone(),
                     version: ver.id.clone(),
+                    channels: crate::model::default_modrinth_channels(),
                 })
                 .ok())
         }
@@ -198,6 +199,7 @@ impl PackwizInterop<'_> {
                 Some(Downloadable::Modrinth {
                     id: mr.mod_id.clone(),
                     version: mr.version.clone(),
+                    channels: crate::model::default_modrinth_channels(),
                 })
             } else if let Some(cf) = &upd.curseforge {
                 if std::env::var("MCMAN_USE_CURSEFORGE").is_ok() {
@@ -405,7 +407,7 @@ impl PackwizInterop<'_> {
 
     pub fn get_mod_update(dl: &Downloadable) -> Option<ModUpdate> {
         match dl {
-            Downloadable::Modrinth { id, version } => Some(ModUpdate {
+            Downloadable::Modrinth { id, version, .. } => Some(ModUpdate {
                 modrinth: Some(rpackwiz::model::ModrinthModUpdate {
                     mod_id: id.clone(),
                     version: version.clone(),

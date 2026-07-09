@@ -99,6 +99,7 @@ pub async fn run(mut app: App, args: Args) -> Result<()> {
             app.add_addon_inferred(Downloadable::Modrinth {
                 id: project.slug.clone(),
                 version: version.id.clone(),
+                channels: crate::model::default_modrinth_channels(),
             })?;
 
             app.save_changes()?;
@@ -109,6 +110,7 @@ pub async fn run(mut app: App, args: Args) -> Result<()> {
             app.add_datapack(Downloadable::Modrinth {
                 id: project.slug.clone(),
                 version: version.id.clone(),
+                channels: crate::model::default_modrinth_channels(),
             })?;
 
             app.save_changes()?;

@@ -49,6 +49,7 @@ impl MRPackInterop<'_> {
                     Some(Downloadable::Modrinth {
                         id: ver.project_id.clone(),
                         version: ver.id.clone(),
+                        channels: crate::model::default_modrinth_channels(),
                     })
                 } else {
                     None

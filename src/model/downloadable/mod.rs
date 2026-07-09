@@ -27,6 +27,13 @@ pub enum Downloadable {
         id: String,
         #[serde(default = "latest")]
         version: String,
+        /// Modrinth version channels considered by `mcman outdated` when looking for a
+        /// newer version of this addon. Defaults to `["release"]`; add eg. `"beta"` or
+        /// `"alpha"` to also be notified about pre-releases. Does not affect
+        /// build/resolve behavior - only which channels count as "up to date" checking.
+        #[serde(default = "default_modrinth_channels")]
+        #[serde(skip_serializing_if = "is_default_modrinth_channels")]
+        channels: Vec<String>,
     },
 
     #[serde(alias = "cr")]
@@ -109,6 +116,14 @@ pub fn is_default_hangar_channels(channels: &[String]) -> bool {
     channels == default_hangar_channels()
 }
 
+pub fn default_modrinth_channels() -> Vec<String> {
+    vec![crate::sources::modrinth::RELEASE_CHANNEL.to_owned()]
+}
+
+pub fn is_default_modrinth_channels(channels: &[String]) -> bool {
+    channels == default_modrinth_channels()
+}
+
 impl Downloadable {
     /// Whether this spec asks for an explicit version/build, as opposed to a
     /// floating reference (eg. "latest"/"first") that must always be re-checked
@@ -151,7 +166,7 @@ impl Resolvable for Downloadable {
                 size: None,
                 hashes: BTreeMap::new(),
             }),
-            Self::Modrinth { id, version } => app.modrinth().resolve_source(id, version).await,
+            Self::Modrinth { id, version, .. } => app.modrinth().resolve_source(id, version).await,
             Self::CurseRinth { id, version } => app.curserinth().resolve_source(id, version).await,
             Self::CurseForge { id, version } => app.curseforge().resolve_source(id, version).await,
             Self::Spigot { id, version } => app.spigot().resolve_source(id, version).await,

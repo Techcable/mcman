@@ -24,8 +24,25 @@ channels = ["Release", "Beta"]
 
 A configured channel other than `Release` that doesn't exist for the project
 (or just has no versions) prints a warning and is otherwise skipped; `Release`
-is assumed to always exist and never warns. Pass `--all-channels` to ignore
-every plugin's `channels` setting and search every channel instead.
+is assumed to always exist and never warns.
+
+Modrinth addons work the same way, using Modrinth's three version types
+(`release`, `beta`, `alpha`) as channels. The default is `["release"]`:
+
+```toml
+[[plugins]]
+type = "modrinth"
+id = "some-plugin"
+version = "abcd1234"
+channels = ["release", "beta"]
+```
+
+Since Modrinth channels are a fixed set rather than arbitrary per-project
+names, an unrecognized entry (eg. a typo) always warns; a recognized channel
+simply having no matching version does not.
+
+Pass `--all-channels` to ignore every addon's `channels` setting and search
+every channel instead, for both Hangar and Modrinth.
 
 Example usage:
 

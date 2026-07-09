@@ -20,6 +20,7 @@ impl App {
                     Ok(Downloadable::Modrinth {
                         id: id.to_owned(),
                         version: version.to_owned(),
+                        channels: crate::model::default_modrinth_channels(),
                     })
                 }
                 ("cr" | "curserinth", id) => {
@@ -83,6 +84,7 @@ impl App {
                 Ok(Downloadable::Modrinth {
                     id: id.to_owned().to_owned(),
                     version: version.to_owned().to_owned(),
+                    channels: crate::model::default_modrinth_channels(),
                 })
             }
 
@@ -119,6 +121,7 @@ impl App {
                 Ok(Downloadable::Modrinth {
                     id: id.to_owned().to_owned(),
                     version: version.clone(),
+                    channels: crate::model::default_modrinth_channels(),
                 })
             }
 

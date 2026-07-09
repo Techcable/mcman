@@ -12,8 +12,10 @@ use crate::{
 
 #[derive(clap::Args)]
 pub struct Args {
-    /// Search every Hangar channel (eg. Beta, Alpha, Snapshot) for updates, ignoring
-    /// each plugin's `channels` setting (which otherwise defaults to `["Release"]`).
+    /// Search every update channel for updates - every Hangar channel (eg. Beta,
+    /// Alpha, Snapshot) and every Modrinth version type (release/beta/alpha) -
+    /// ignoring each addon's `channels` setting (which otherwise defaults to
+    /// `["Release"]` for Hangar and `["release"]` for Modrinth).
     #[arg(long)]
     all_channels: bool,
 }
@@ -60,9 +62,19 @@ fn is_checkable(target: &CheckTarget) -> bool {
 
 async fn check_update(app: &App, target: &CheckTarget, all_channels: bool) -> Result<CheckResult> {
     Ok(match target {
-        CheckTarget::Downloadable(Downloadable::Modrinth { id, version }) => {
+        CheckTarget::Downloadable(Downloadable::Modrinth {
+            id,
+            version,
+            channels,
+        }) => {
             let current = app.modrinth().fetch_version(id, version).await?;
-            let latest = app.modrinth().fetch_version(id, "latest").await?;
+            let latest = if all_channels {
+                app.modrinth().fetch_version(id, "latest").await?
+            } else {
+                app.modrinth()
+                    .fetch_newest_version_in_channels(id, channels)
+                    .await?
+            };
 
             if current.id == latest.id {
                 CheckResult::UpToDate

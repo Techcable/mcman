@@ -267,7 +267,7 @@ impl MarkdownAPI<'_> {
         dl: &Downloadable,
     ) -> Result<IndexMap<Cow<'static, str>, String>> {
         let (name, description, version) = match dl {
-            Downloadable::Modrinth { id, version } => {
+            Downloadable::Modrinth { id, version, .. } => {
                 let proj = self.0.modrinth().fetch_project(id).await?;
 
                 (
