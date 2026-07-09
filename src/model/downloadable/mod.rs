@@ -25,7 +25,9 @@ pub enum Downloadable {
     #[serde(alias = "mr")]
     Modrinth {
         id: String,
-        #[serde(default = "latest")]
+        // Deliberately not `#[serde(default = "latest")]` (unlike CurseForge/CurseRinth/etc):
+        // an addon missing `version` should fail to parse loudly, rather than silently
+        // becoming an unpinned "latest" that `mcman outdated` can never flag as outdated.
         version: String,
         /// Modrinth version channels considered by `mcman outdated` when looking for a
         /// newer version of this addon. Defaults to `["release"]`; add eg. `"beta"` or
@@ -52,7 +54,7 @@ pub enum Downloadable {
 
     Spigot {
         id: String,
-        #[serde(default = "latest")]
+        // See the comment on Modrinth's `version` - deliberately required, not defaulted.
         version: String,
     },
 

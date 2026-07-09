@@ -20,4 +20,4 @@ Downloads a mod, plugin or a datapack from [Modrinth](https://modrinth.com/)'s A
 | --------- | ------------------- | ---------------------------------------------------------- |
 | `type`    | `"modrinth"`/`"mr"` |                                                            |
 | `id`      | string              | The slug or the ID of the project                          |
-| `version` | string/`"latest"`   | Version ID or number, `"latest"` not recommended as of now |
+| `version` | string/`"latest"`   | Version ID or number, `"latest"` not recommended as of now. Required - not optional, must be set explicitly even if `"latest"` |
