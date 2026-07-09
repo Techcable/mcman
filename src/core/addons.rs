@@ -33,6 +33,8 @@ impl BuildContext<'_> {
         let locked: HashMap<_, _> = addons.iter().map(|(dl, res)| (dl, res)).collect();
 
         if server_list.is_empty() && existing_files.is_empty() {
+            self.warn_unrecognized_files(addon_type, &HashSet::new())
+                .await?;
             return Ok(());
         }
 
@@ -105,6 +107,9 @@ impl BuildContext<'_> {
 
         pb.finish_and_clear();
 
+        self.warn_unrecognized_files(addon_type, &files_list)
+            .await?;
+
         if files_list.len() >= 10 {
             self.app.success(format!(
                 "Processed {} {addon_type}{} in {}",
@@ -115,6 +120,49 @@ impl BuildContext<'_> {
         }
 
         self.app.ci("::endgroup::");
+
+        Ok(())
+    }
+
+    /// Warns about `.jar` files directly inside the addon folder that don't
+    /// correspond to any declaration in `server.toml`. Doesn't touch them -
+    /// unlike the build-time pruning (`build_prune_include`), this is purely
+    /// informational, since files here (private/proprietary jars, manual test
+    /// builds, etc.) are often placed there intentionally.
+    async fn warn_unrecognized_files(
+        &self,
+        addon_type: AddonType,
+        files_list: &HashSet<String>,
+    ) -> Result<()> {
+        let folder = self.output_dir.join(addon_type.folder());
+
+        let mut entries = match fs::read_dir(&folder).await {
+            Ok(entries) => entries,
+            Err(err) if err.kind() == ErrorKind::NotFound => return Ok(()),
+            Err(err) => return Err(err.into()),
+        };
+
+        while let Some(entry) = entries.next_entry().await? {
+            if !entry.file_type().await?.is_file() {
+                continue;
+            }
+
+            let path = entry.path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("jar") {
+                continue;
+            }
+
+            let name = entry.file_name().to_string_lossy().into_owned();
+
+            if files_list.contains(&name) {
+                continue;
+            }
+
+            self.app.warn(format!(
+                "Unrecognized file in {}/: '{name}' - not declared in server.toml, leaving it as is",
+                addon_type.folder(),
+            ));
+        }
 
         Ok(())
     }
