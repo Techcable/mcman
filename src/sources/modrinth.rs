@@ -209,7 +209,8 @@ impl ModrinthAPI<'_> {
         Ok(version_data)
     }
 
-    /// Finds the newest version (compatible with this server's `mc_version`/loader)
+    /// Finds the newest version (compatible with this server's loader, but NOT
+    /// restricted to its exact `mc_version` - see [`Self::filter_versions_loader_only`])
     /// whose `version_type` is one of the given channels (eg. `["release"]`, or
     /// `["release", "beta"]`).
     ///
@@ -231,7 +232,8 @@ impl ModrinthAPI<'_> {
             }
         }
 
-        let versions = self.fetch_versions(id).await?;
+        let all_versions = self.fetch_all_versions(id).await?;
+        let versions = self.filter_versions_loader_only(&all_versions);
 
         versions
             .into_iter()
@@ -245,6 +247,21 @@ impl ModrinthAPI<'_> {
                     "No versions found in any of channels {channels:?} for Modrinth project '{id}'"
                 )
             })
+    }
+
+    /// Finds the newest version (compatible with this server's loader, but NOT
+    /// restricted to its exact `mc_version`) regardless of channel/`version_type`.
+    /// Used by `mcman outdated --all-channels`, which should surface an update even
+    /// if the newest version hasn't been tagged with this server's exact `mc_version`
+    /// yet - unlike normal build/resolve, which must stay `mc_version`-exact.
+    pub async fn fetch_newest_version_any_channel(&self, id: &str) -> Result<ModrinthVersion> {
+        let all_versions = self.fetch_all_versions(id).await?;
+        let versions = self.filter_versions_loader_only(&all_versions);
+
+        versions
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow!("No versions found for Modrinth project '{id}'"))
     }
 
     pub async fn fetch_file(
@@ -293,13 +310,24 @@ impl ModrinthAPI<'_> {
 
     pub fn filter_versions(&self, list: &[ModrinthVersion]) -> Vec<ModrinthVersion> {
         let is_proxy = self.0.server.jar.get_software_type() == SoftwareType::Proxy;
-        let is_vanilla = matches!(self.0.server.jar, ServerType::Vanilla {});
-
         let mcver = self.0.mc_version();
+
+        self.filter_versions_loader_only(list)
+            .into_iter()
+            .filter(|v| is_proxy || v.game_versions.iter().any(|s| s.as_str() == mcver))
+            .collect()
+    }
+
+    /// Same loader compatibility check as [`Self::filter_versions`], but without
+    /// restricting to versions tagged with this server's exact `mc_version`. A newly
+    /// published version may not have that exact string in `game_versions` yet even
+    /// though it's otherwise a valid update, so update-checking (`mcman outdated`)
+    /// uses this instead of `filter_versions` to avoid silently missing it.
+    pub fn filter_versions_loader_only(&self, list: &[ModrinthVersion]) -> Vec<ModrinthVersion> {
+        let is_vanilla = matches!(self.0.server.jar, ServerType::Vanilla {});
         let loader = self.get_modrinth_name();
 
         list.iter()
-            .filter(|v| is_proxy || v.game_versions.iter().any(|s| s.as_str() == mcver))
             .filter(|v| {
                 if let Some(n) = loader {
                     v.loaders

@@ -69,7 +69,7 @@ async fn check_update(app: &App, target: &CheckTarget, all_channels: bool) -> Re
         }) => {
             let current = app.modrinth().fetch_version(id, version).await?;
             let latest = if all_channels {
-                app.modrinth().fetch_version(id, "latest").await?
+                app.modrinth().fetch_newest_version_any_channel(id).await?
             } else {
                 app.modrinth()
                     .fetch_newest_version_in_channels(id, channels)
