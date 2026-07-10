@@ -201,7 +201,8 @@ impl ModrinthAPI<'_> {
             ))?
             .clone();
             self.0.warn(format!(
-                "Filtering failed for modrinth.com/mod/{id}/version/{ver}"
+                "modrinth.com/mod/{id}/version/{ver} doesn't match this server's loader/game version, using it anyway{}",
+                self.describe_filter_mismatch(&v)
             ));
             v
         };
@@ -323,6 +324,35 @@ impl ModrinthAPI<'_> {
     /// published version may not have that exact string in `game_versions` yet even
     /// though it's otherwise a valid update, so update-checking (`mcman outdated`)
     /// uses this instead of `filter_versions` to avoid silently missing it.
+    /// Explains why `v` didn't pass [`Self::filter_versions`], for the warning shown
+    /// when a pinned version falls outside the loader/game-version filter (eg. it's
+    /// published for a different Minecraft version than this server's).
+    fn describe_filter_mismatch(&self, v: &ModrinthVersion) -> String {
+        let mut reasons = Vec::new();
+
+        if self
+            .filter_versions_loader_only(std::slice::from_ref(v))
+            .is_empty()
+        {
+            reasons.push(format!("published for loaders [{}]", v.loaders.join(", ")));
+        }
+
+        let is_proxy = self.0.server.jar.get_software_type() == SoftwareType::Proxy;
+        let mcver = self.0.mc_version();
+        if !is_proxy && !v.game_versions.iter().any(|s| s == mcver) {
+            reasons.push(format!(
+                "published for game versions [{}], not '{mcver}'",
+                v.game_versions.join(", ")
+            ));
+        }
+
+        if reasons.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", reasons.join("; "))
+        }
+    }
+
     pub fn filter_versions_loader_only(&self, list: &[ModrinthVersion]) -> Vec<ModrinthVersion> {
         let is_vanilla = matches!(self.0.server.jar, ServerType::Vanilla {});
         let loader = self.get_modrinth_name();
