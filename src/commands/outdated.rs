@@ -44,18 +44,18 @@ enum CheckResult {
     Outdated { current: String, latest: String },
 }
 
-/// Whether `check_update` supports this target: a Modrinth/Hangar/Spigot addon or a
-/// PaperMC-family server jar, pinned to an explicit version/build rather than a
+/// Whether `check_update` supports this target: a Modrinth/Hangar/Spigot/Jenkins addon
+/// or a PaperMC-family server jar, pinned to an explicit version/build rather than a
 /// floating `"latest"` (which is already up to date by definition on every build).
 fn is_checkable(target: &CheckTarget) -> bool {
     match target {
-        CheckTarget::Downloadable(dl) => matches!(
-            dl,
+        CheckTarget::Downloadable(dl) => match dl {
             Downloadable::Modrinth { version, .. }
             | Downloadable::Hangar { version, .. }
-            | Downloadable::Spigot { version, .. }
-                if version != "latest"
-        ),
+            | Downloadable::Spigot { version, .. } => version != "latest",
+            Downloadable::Jenkins { build, .. } => build != "latest",
+            _ => false,
+        },
         CheckTarget::PaperBuild { build, .. } => build != "latest",
     }
 }
@@ -121,6 +121,24 @@ async fn check_update(app: &App, target: &CheckTarget, all_channels: bool) -> Re
                 }
             }
         }
+        CheckTarget::Downloadable(Downloadable::Jenkins {
+            url, job, build, ..
+        }) => {
+            let job = job
+                .replace("${mcver}", app.mc_version())
+                .replace("${mcversion}", app.mc_version());
+            let current = app.jenkins().fetch_build(url, &job, build).await?;
+            let latest = app.jenkins().fetch_build(url, &job, "latest").await?;
+
+            if current.number == latest.number {
+                CheckResult::UpToDate
+            } else {
+                CheckResult::Outdated {
+                    current: format!("build {}", current.number),
+                    latest: format!("build {}", latest.number),
+                }
+            }
+        }
         CheckTarget::PaperBuild { project, build } => {
             let current = app
                 .papermc()
@@ -147,8 +165,9 @@ async fn check_update(app: &App, target: &CheckTarget, all_channels: bool) -> Re
 }
 
 /// Reports plugins, mods and the server jar (when pinned to Modrinth, Hangar, Spigot,
-/// or a PaperMC-family build) that have a newer version available upstream. Read-only:
-/// it never edits server.toml or the lockfile, it only prints what could be updated.
+/// Jenkins, or a PaperMC-family build) that have a newer version available upstream.
+/// Read-only: it never edits server.toml or the lockfile, it only prints what could
+/// be updated.
 pub async fn run(app: App, args: Args) -> Result<()> {
     let mut targets: Vec<(&'static str, CheckTarget)> = Vec::new();
 
@@ -183,7 +202,7 @@ pub async fn run(app: App, args: Args) -> Result<()> {
 
     if targets.is_empty() {
         app.info(
-            "No plugins, mods, or server jar pinned to Modrinth/Hangar/Spigot/PaperMC to check.",
+            "No plugins, mods, or server jar pinned to Modrinth/Hangar/Spigot/Jenkins/PaperMC to check.",
         );
         return Ok(());
     }
